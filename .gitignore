@@ -1,2 +1,7 @@
 node_modules/
 .env
+gemini_cred.json
+*.json.key
+post-image.png
+dist/
+output/

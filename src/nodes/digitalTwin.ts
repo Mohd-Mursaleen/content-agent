@@ -18,6 +18,9 @@ import Supermemory from "supermemory";
 import { env } from "../config/env.js";
 import type { AgentStateType } from "../state/schema.js";
 
+const hr = (label: string) =>
+  console.log(`\n${"─".repeat(20)} ${label} ${"─".repeat(20)}`);
+
 // The container tag scopes all memory reads/writes to a single user's memory space.
 // Override via SUPERMEMORY_CONTAINER_TAG env var if you manage multiple users.
 const CONTAINER_TAG =
@@ -77,9 +80,14 @@ export function createDigitalTwinNode() {
         ? sections.join("\n\n")
         : "No personal context stored yet. Write in a direct, first-person, conversational tone.";
 
-    console.log(
-      `[Node 1] Profile retrieved — ${staticFacts.length} static fact(s), ${dynamicContext.length} dynamic item(s).`
-    );
+    hr("Node 1 — Supermemory Profile");
+    console.log(`Container : ${CONTAINER_TAG}`);
+    console.log(`Static facts (${staticFacts.length}):`);
+    staticFacts.forEach((f, i) => console.log(`  [${i + 1}] ${f}`));
+    console.log(`Dynamic context (${dynamicContext.length}):`);
+    dynamicContext.forEach((d, i) => console.log(`  [${i + 1}] ${d}`));
+    console.log(`\nPersonal context passed downstream:\n${personalContext}`);
+    hr("End Node 1");
 
     return { personalContext };
   };

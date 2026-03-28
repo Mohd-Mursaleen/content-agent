@@ -2,22 +2,32 @@
  * Node 2: Research
  *
  * Two-step research pipeline:
- *   1. Natively fetches the top 3 Hacker News stories via the Firebase API.
- *   2. Uses a ReAct agent (DeepSeek + Apify MCP tools) to run the
+ *   1. Natively fetches the top 7 Hacker News stories via the Firebase API.
+ *   2. Uses a ReAct agent (GPT-5.3 + Apify MCP tools) to run the
  *      `harvestapi/linkedin-post-search` actor and retrieve relevant LinkedIn posts.
  *
- * The LLM summarizes both sources into a single `researchData` string.
+ * GPT-5.3 is used here instead of DeepSeek because the Apify actor catalog exposes
+ * 100+ tool definitions with verbose JSON schemas. Combined with the actor result
+ * payload, the total context easily exceeds DeepSeek's 131k token limit.
  */
 
-import { ChatDeepSeek } from "@langchain/deepseek";
-import { HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
+import { ChatOpenAI } from "@langchain/openai";
+
+const hr = (label: string) =>
+  console.log(`\n${"─".repeat(20)} ${label} ${"─".repeat(20)}`);
+import {
+  HumanMessage,
+  SystemMessage,
+  ToolMessage,
+} from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { env } from "../config/env.js";
 import type { AgentStateType } from "../state/schema.js";
 
-const HN_TOP_STORIES_URL = "https://hacker-news.firebaseio.com/v0/topstories.json";
+const HN_TOP_STORIES_URL =
+  "https://hacker-news.firebaseio.com/v0/topstories.json";
 const HN_ITEM_URL = (id: number) =>
   `https://hacker-news.firebaseio.com/v0/item/${id}.json`;
 
@@ -42,35 +52,34 @@ async function fetchTopHackerNewsStories(): Promise<string> {
   }
 
   const ids: number[] = (await idsRes.json()) as number[];
-  const top3 = ids.slice(0, 3);
+  const top7 = ids.slice(0, 7);
 
   const stories = await Promise.all(
-    top3.map(async (id) => {
+    top7.map(async (id) => {
       const res = await fetch(HN_ITEM_URL(id));
       if (!res.ok) {
         throw new Error(`HN item ${id} fetch failed: ${res.status}`);
       }
       return (await res.json()) as HNStory;
-    })
+    }),
   );
 
   return stories
     .map(
       (s) =>
-        `- "${s.title}" by ${s.by} (score: ${s.score})${s.url ? ` — ${s.url}` : ""}`
+        `- "${s.title}" by ${s.by} (score: ${s.score})${s.url ? ` — ${s.url}` : ""}`,
     )
     .join("\n");
 }
 
 /**
  * Normalizes ToolMessage content from MCP's array-of-content-blocks format to a
- * plain string, which DeepSeek's OpenAI-compatible API requires.
+ * plain string before each LLM call in the ReAct loop.
  *
  * MCP tools return: [{type: "text", text: "..."}]
- * DeepSeek expects:  "..."
+ * Most LLM APIs expect: "..."
  *
- * This runs as a messageModifier before every LLM call in the ReAct loop,
- * acting as a safety net on top of the useStandardContentBlocks: false client setting.
+ * Acts as a safety net on top of the useStandardContentBlocks: false client setting.
  *
  * @param messages - The full message list about to be sent to the LLM
  * @returns Messages with all ToolMessage content coerced to strings
@@ -79,7 +88,9 @@ function normalizeMcpToolMessages(messages: BaseMessage[]): BaseMessage[] {
   return messages.map((msg) => {
     if (msg instanceof ToolMessage && Array.isArray(msg.content)) {
       const text = (msg.content as Array<{ type?: string; text?: string }>)
-        .filter((block) => block.type === "text" && typeof block.text === "string")
+        .filter(
+          (block) => block.type === "text" && typeof block.text === "string",
+        )
         .map((block) => block.text as string)
         .join("\n");
 
@@ -100,9 +111,11 @@ function normalizeMcpToolMessages(messages: BaseMessage[]): BaseMessage[] {
  * @returns LangGraph node function
  */
 export function createResearchNode(apifyTools: StructuredToolInterface[]) {
-  const llm = new ChatDeepSeek({
-    model: "deepseek-chat",
-    apiKey: env.DEEPSEEK_API_KEY,
+  // Gemini API — authenticated via GEMINI_API_KEY (same key used by finalOutput.ts).
+  // 1M token context window handles the full Apify actor catalog + large result payloads.
+  const llm = new ChatOpenAI({
+    model: "gpt-5.4-2026-03-05",
+    apiKey: env.OPENAI_API_KEY,
     temperature: 0.2,
   });
 
@@ -110,7 +123,6 @@ export function createResearchNode(apifyTools: StructuredToolInterface[]) {
     llm,
     tools: apifyTools,
     // Normalize MCP tool result content from arrays to strings before each LLM call.
-    // DeepSeek requires tool message content to be a plain string.
     messageModifier: normalizeMcpToolMessages,
   });
 
@@ -121,16 +133,21 @@ export function createResearchNode(apifyTools: StructuredToolInterface[]) {
    * @returns Partial state update with `researchData`
    */
   return async function researchNode(
-    state: AgentStateType
+    state: AgentStateType,
   ): Promise<Partial<AgentStateType>> {
     console.log("[Node 2] Research — fetching Hacker News stories...");
     const hnStories = await fetchTopHackerNewsStories();
-    console.log("[Node 2] HN stories fetched. Querying Apify LinkedIn search...");
+
+    hr("Node 2 — Hacker News Top Stories");
+    console.log(hnStories);
+    hr("End HN");
+
+    console.log("[Node 2] Querying Apify LinkedIn search (this may take a while)...");
 
     const result = await agent.invoke({
       messages: [
         new SystemMessage(
-          "You are a research agent. Use the Apify tools available to you to search LinkedIn posts."
+          "You are a research agent. Use the Apify tools available to you to search LinkedIn posts.",
         ),
         new HumanMessage(
           `Today's top Hacker News stories:\n${hnStories}\n\n` +
@@ -138,7 +155,7 @@ export function createResearchNode(apifyTools: StructuredToolInterface[]) {
             `with the following input JSON:\n` +
             `{"queries": ["AI Agents", "Node.js"], "postedLimit": "week", "sortBy": "relevance", "maxPosts": 3}\n\n` +
             `After getting the LinkedIn results, write a concise research brief that summarizes ` +
-            `key themes and insights from BOTH the Hacker News stories AND the LinkedIn posts.`
+            `key themes and insights from BOTH the Hacker News stories AND the LinkedIn posts.`,
         ),
       ],
     });
@@ -149,7 +166,10 @@ export function createResearchNode(apifyTools: StructuredToolInterface[]) {
         ? lastMessage.content
         : JSON.stringify(lastMessage.content);
 
-    console.log("[Node 2] Research complete.");
+    hr("Node 2 — Research Brief");
+    console.log(researchData);
+    hr("End Node 2");
+
     return { researchData };
   };
 }

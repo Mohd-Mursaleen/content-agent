@@ -120,9 +120,9 @@ async function testEnv(): Promise<boolean> {
     })) && ok;
 
   ok =
-    (await run("GEMINI_API_KEY is set", async () => {
-      if (!env.GEMINI_API_KEY) throw new Error("empty");
-      info(`Starts with: ${env.GEMINI_API_KEY.slice(0, 6)}...`);
+    (await run("OPENAI_API_KEY is set", async () => {
+      if (!env.OPENAI_API_KEY) throw new Error("empty");
+      info(`Starts with: ${env.OPENAI_API_KEY.slice(0, 6)}...`);
     })) && ok;
 
   ok =

@@ -15,6 +15,9 @@ import { env } from "../config/env.js";
 import { ReflectionOutputSchema } from "../state/schema.js";
 import type { AgentStateType } from "../state/schema.js";
 
+const hr = (label: string) =>
+  console.log(`\n${"─".repeat(20)} ${label} ${"─".repeat(20)}`);
+
 const REFLECTION_SYSTEM_PROMPT = `You are a strict editorial critic reviewing social media content for authenticity.
 
 Evaluate both drafts against ALL of the following criteria:
@@ -70,8 +73,10 @@ export function createReflectionNode() {
       ),
     ]);
 
-    const verdict = result.passed ? "APPROVED" : "REJECTED";
-    console.log(`[Node 4] Verdict: ${verdict}. Feedback: ${result.feedback}`);
+    const verdict = result.passed ? "✓ APPROVED" : "✗ REJECTED";
+    hr(`Node 4 — Reflection Cycle ${state.revisionCount + 1} — ${verdict}`);
+    console.log(`Feedback:\n${result.feedback}`);
+    hr("End Node 4");
 
     return {
       isApproved: result.passed,

@@ -15,7 +15,9 @@
     "test:mcp": "tsx src/test.ts mcp",
     "test:hn": "tsx src/test.ts hn",
     "test:draft": "tsx src/test.ts draft",
-    "test:pipeline": "tsx src/test.ts pipeline"
+    "test:pipeline": "tsx src/test.ts pipeline",
+    "test:image": "tsx src/test-image.ts",
+    "pipeline": "tsx src/run.ts"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +26,8 @@
     "@google/genai": "^1.46.0",
     "@langchain/core": "^1.1.36",
     "@langchain/deepseek": "^1.0.19",
+    "@langchain/google-genai": "^2.1.26",
+    "@langchain/google-vertexai": "^2.1.26",
     "@langchain/langgraph": "^1.2.6",
     "@langchain/mcp-adapters": "^1.1.3",
     "@modelcontextprotocol/sdk": "^1.28.0",

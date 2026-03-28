@@ -15,6 +15,9 @@ import { env } from "../config/env.js";
 import { DraftOutputSchema } from "../state/schema.js";
 import type { AgentStateType } from "../state/schema.js";
 
+const hr = (label: string) =>
+  console.log(`\n${"─".repeat(20)} ${label} ${"─".repeat(20)}`);
+
 const HUMANIZATION_SYSTEM_PROMPT = `You are my digital twin — a ghostwriter who writes exactly like me.
 
 Write two posts based on the provided research data, aligned strictly with my personal context.
@@ -75,7 +78,12 @@ export function createDraftingNode() {
       ),
     ]);
 
-    console.log("[Node 3] Drafts generated.");
+    hr(`Node 3 — LinkedIn Draft (${result.linkedinDraft.split(/\s+/).length} words)`);
+    console.log(result.linkedinDraft);
+    hr(`Node 3 — X Draft (${result.xDraft.length} chars)`);
+    console.log(result.xDraft);
+    hr("End Node 3");
+
     return {
       linkedinDraft: result.linkedinDraft,
       xDraft: result.xDraft,

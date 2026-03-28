@@ -82,8 +82,10 @@ export const DraftOutputSchema = z.object({
     .describe("Complete LinkedIn post draft with no character limit"),
   xDraft: z
     .string()
-    .max(280)
-    .describe("X/Twitter post draft, strictly under 280 characters"),
+    .describe(
+      "X/Twitter post draft, strictly under 280 characters. " +
+        "The 280-char limit is enforced by the reflection loop, not this schema."
+    ),
 });
 
 export type DraftOutput = z.infer<typeof DraftOutputSchema>;
