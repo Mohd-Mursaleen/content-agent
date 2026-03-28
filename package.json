@@ -1,0 +1,39 @@
+{
+  "name": "content-agent",
+  "version": "1.0.0",
+  "description": "Stateful autonomous AI content generation agent using LangGraph.js",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx src/test.ts all",
+    "test:env": "tsx src/test.ts env",
+    "test:memory": "tsx src/test.ts memory",
+    "test:mcp": "tsx src/test.ts mcp",
+    "test:hn": "tsx src/test.ts hn",
+    "test:draft": "tsx src/test.ts draft",
+    "test:pipeline": "tsx src/test.ts pipeline"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/genai": "^1.46.0",
+    "@langchain/core": "^1.1.36",
+    "@langchain/deepseek": "^1.0.19",
+    "@langchain/langgraph": "^1.2.6",
+    "@langchain/mcp-adapters": "^1.1.3",
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "dotenv": "^17.3.1",
+    "supermemory": "^4.17.0",
+    "zod-to-json-schema": "^3.25.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
