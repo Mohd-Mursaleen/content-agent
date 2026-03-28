@@ -8,61 +8,60 @@ A stateful, autonomous AI content generation agent built with **LangGraph.js**. 
 
 ```mermaid
 flowchart TD
-    START([START]) --> A
+    START([Start]) --> A
 
-    A["🧠 Node 1: Digital Twin\n─────────────────────\nSupermemory SDK → profile()\nFetches: tech interests,\ncurrent projects, tone of voice\n─────────────────────\n→ personalContext"]
-
+    A["🔍 Research\nHN top 7 + LinkedIn posts\nvia Apify MCP"]
     A --> B
 
-    B["🔍 Node 2: Research\n─────────────────────\nHacker News Firebase API\nTop 3 stories via native fetch\n+\nApify MCP → call-actor\nharvestapi/linkedin-post-search\n─────────────────────\n→ researchData"]
-
+    B["🧠 Digital Twin\nSupermemory profile query\nbuilt from research topics"]
     B --> C
 
-    C["✍️ Node 3: Drafting\n─────────────────────\nDeepSeek deepseek-chat\nwithStructuredOutput()\nHumanization rules enforced\nInjected: personalContext +\nresearchData + critiqueFeedback\n─────────────────────\n→ linkedinDraft\n→ xDraft"]
-
+    C["✍️ Drafting\nDeepSeek — LinkedIn + X drafts\nwith humanization rules"]
     C --> D
 
-    D["🪞 Node 4: Reflection\n─────────────────────\nDeepSeek deepseek-chat\nStrict editorial review against\n8 humanization criteria\nAlways increments revisionCount\n─────────────────────\n→ isApproved\n→ critiqueFeedback\n→ revisionCount++"]
+    D["🪞 Reflection\nDeepSeek — strict editorial review\nagainst 8 quality criteria"]
+    D --> GATE{Approved?\nor 3 cycles hit?}
 
-    D --> GATE{isApproved?\nOR revisionCount ≥ 3?}
+    GATE -- Yes --> E
+    GATE -- No, revise --> C
 
-    GATE -- "No → revise" --> C
-    GATE -- "Yes → finalize" --> E
-
-    E["🎨 Node 5: Final Output\n─────────────────────\nStep 1: gemini-3.1-flash-preview\nFinal text polish (JSON mode)\n→ finalLinkedinPost\n→ finalXPost\n\nStep 2: gemini-3.1-flash-image-preview\nGenerate header image\nExtract base64 → write PNG\n─────────────────────\n→ finalLinkedinPost\n→ finalXPost\n→ finalImageUrl"]
-
-    E --> END([END])
+    E["🎨 Final Output\nText polish + image generation\nOpenAI or Gemini via toggle"]
+    E --> END([End])
 
     style START fill:#22c55e,color:#fff,stroke:none
-    style END fill:#22c55e,color:#fff,stroke:none
-    style GATE fill:#f59e0b,color:#fff,stroke:none
-    style A fill:#6366f1,color:#fff,stroke:none
-    style B fill:#6366f1,color:#fff,stroke:none
-    style C fill:#6366f1,color:#fff,stroke:none
-    style D fill:#6366f1,color:#fff,stroke:none
-    style E fill:#6366f1,color:#fff,stroke:none
+    style END   fill:#22c55e,color:#fff,stroke:none
+    style GATE  fill:#f59e0b,color:#fff,stroke:none
+    style A     fill:#6366f1,color:#fff,stroke:none
+    style B     fill:#6366f1,color:#fff,stroke:none
+    style C     fill:#6366f1,color:#fff,stroke:none
+    style D     fill:#6366f1,color:#fff,stroke:none
+    style E     fill:#6366f1,color:#fff,stroke:none
 ```
 
-### Reflection Loop Detail
+### Reflection Loop
 
 The agent self-critiques and rewrites until quality passes — with a hard cap at 3 cycles:
 
 ```mermaid
 sequenceDiagram
-    participant D as Drafting Node
-    participant R as Reflection Node
+    participant R as Research
+    participant DT as Digital Twin
+    participant D as Drafting
+    participant Ref as Reflection
     participant F as Final Output
 
-    D->>R: linkedinDraft + xDraft
-    R->>R: Check 8 humanization rules
-    alt passed = false AND revisionCount < 3
-        R-->>D: critiqueFeedback (revisionCount++)
-        D->>R: revised drafts
-    else passed = true OR revisionCount ≥ 3
-        R-->>F: approved drafts
+    R->>DT: researchData (HN + LinkedIn brief)
+    DT->>D: personalContext (memory-aware query result)
+    D->>Ref: linkedinDraft + xDraft
+
+    loop Until approved or 3 cycles
+        Ref->>Ref: Check 8 humanization rules
+        Ref-->>D: critiqueFeedback (revisionCount++)
+        D->>Ref: revised drafts
     end
-    F->>F: Gemini text polish
-    F->>F: Gemini image generation → post-image.png
+
+    Ref->>F: approved drafts
+    F->>F: Text polish + image generation
 ```
 
 ---
@@ -71,13 +70,14 @@ sequenceDiagram
 
 | Layer | Technology |
 |---|---|
-| Orchestration | [LangGraph.js](https://langchain-ai.github.io/langgraphjs/) (`@langchain/langgraph`) |
-| Drafting & Reflection LLM | [DeepSeek](https://www.deepseek.com/) via `@langchain/deepseek` — `deepseek-chat` |
-| Final Output LLM | [Google Gemini](https://ai.google.dev/) via `@google/genai` — `gemini-3.1-flash-preview` |
-| Image Generation | Google Gemini via `@google/genai` — `gemini-3.1-flash-image-preview` |
-| Personal Memory | [Supermemory](https://supermemory.ai/) SDK — direct REST API |
-| Web Research | [Apify](https://apify.com/) via MCP — `harvestapi/linkedin-post-search` actor |
-| HN Research | [Hacker News Firebase API](https://hacker-news.firebaseio.com/) — native `fetch` |
+| Orchestration | LangGraph.js (`@langchain/langgraph`) |
+| Research LLM | OpenAI `gpt-5.4` via `@langchain/openai` — ReAct agent over Apify tools |
+| Drafting & Reflection | DeepSeek `deepseek-chat` via `@langchain/deepseek` |
+| Final Output — OpenAI path | `gpt-4o` (text) + `gpt-image-1-mini` (image) |
+| Final Output — Gemini path | Vertex AI `gemini-3.1-flash-preview` (text) + `gemini-3.1-flash-image-preview` (image) |
+| Personal Memory | Supermemory SDK (`supermemory` npm package) |
+| LinkedIn Research | Apify MCP — `harvestapi/linkedin-post-search` actor |
+| HN Research | Hacker News Firebase API — native `fetch`, top 7 stories |
 | MCP Transport | `@langchain/mcp-adapters` + `@modelcontextprotocol/sdk` |
 | Runtime | Node.js 22 + TypeScript (strict, NodeNext ESM) |
 | Schema Validation | Zod |
@@ -96,54 +96,48 @@ content-agent/
 │   ├── mcp/
 │   │   └── client.ts           # Apify MCP client (MultiServerMCPClient)
 │   ├── nodes/
-│   │   ├── digitalTwin.ts      # Node 1 — Supermemory profile fetch
-│   │   ├── research.ts         # Node 2 — HN fetch + Apify LinkedIn search
+│   │   ├── research.ts         # Node 1 — HN fetch + Apify LinkedIn search
+│   │   ├── digitalTwin.ts      # Node 2 — Supermemory context-aware profile fetch
 │   │   ├── drafting.ts         # Node 3 — DeepSeek structured draft generation
 │   │   ├── reflection.ts       # Node 4 — DeepSeek editorial critique
-│   │   └── finalOutput.ts      # Node 5 — Gemini text polish + image generation
+│   │   └── finalOutput.ts      # Node 5 — Text polish + image generation (OpenAI or Gemini)
 │   ├── agent/
 │   │   └── workflow.ts         # StateGraph assembly + conditional edge logic
-│   ├── index.ts                # Entry point
-│   └── test.ts                 # Modular integration test runner
-├── .env                        # API keys (never commit this)
+│   ├── index.ts                # Basic entry point
+│   ├── run.ts                  # Pipeline runner — saves full JSON snapshot to output/
+│   ├── test.ts                 # Modular integration test runner
+│   └── test-image.ts           # Standalone image generation test
+├── output/                     # JSON run snapshots (git-ignored)
+├── .example.env                # Environment variable template
 ├── package.json
-├── tsconfig.json
-└── post-image.png              # Generated after a run (git-ignored)
+└── tsconfig.json
 ```
 
 ---
 
 ## State Schema
 
-All fields use a **last-write-wins** reducer. Each node returns only the fields it modifies; LangGraph merges them into the running state.
+All fields use a **last-write-wins** reducer. Each node returns only the fields it modifies.
 
 ```
 AgentState
-├── personalContext    string   — Digital Twin data from Supermemory
-├── researchData       string   — Aggregated HN + LinkedIn research brief
+├── researchData       string   — HN + LinkedIn research brief (set by Research node)
+├── personalContext    string   — Memory profile queried against research topics
 ├── linkedinDraft      string   — Current draft (updated on each revision)
-├── xDraft             string   — Current X draft, max 280 chars
-├── revisionCount      number   — Incremented by Reflection node (default: 0)
-├── critiqueFeedback   string   — Reflection node's specific critique for next revision
-├── isApproved         boolean  — Reflection verdict (default: false)
-├── finalLinkedinPost  string   — Gemini-polished LinkedIn post
-├── finalXPost         string   — Gemini-polished X post
-└── finalImageUrl      string   — Path to generated PNG (e.g. "post-image.png")
+├── xDraft             string   — Current X draft (≤ 280 chars, enforced by reflection)
+├── revisionCount      number   — Incremented by Reflection on every cycle
+├── critiqueFeedback   string   — Specific critique for the next revision pass
+├── isApproved         boolean  — Reflection verdict
+├── finalLinkedinPost  string   — Polished LinkedIn post
+├── finalXPost         string   — Polished X post
+└── finalImageUrl      string   — Path to generated PNG ("post-image.png")
 ```
-
----
-
-## Prerequisites
-
-- **Node.js 22+**
-- **npm 10+**
-- API keys for: DeepSeek, Google Gemini, Supermemory, Apify
 
 ---
 
 ## Setup
 
-### 1. Clone and install
+### 1. Install
 
 ```bash
 git clone https://github.com/your-username/content-agent.git
@@ -153,31 +147,40 @@ npm install
 
 ### 2. Configure environment
 
-Create a `.env` file in the project root:
+Copy `.example.env` to `.env` and fill in your values:
 
 ```bash
+# Required
 DEEPSEEK_API_KEY=your_deepseek_key
-GEMINI_API_KEY=your_gemini_key
+OPENAI_API_KEY=your_openai_key
 SUPERMEMORY_API_KEY=your_supermemory_key
 APIFY_TOKEN=your_apify_token
 
-# Optional: scope your memory to a custom container tag (default: "content-agent-user")
-SUPERMEMORY_CONTAINER_TAG=content-agent-user
+# Optional — defaults to "openai"
+FINAL_OUTPUT_PROVIDER=openai
+
+# Required only when FINAL_OUTPUT_PROVIDER=gemini
+# GOOGLE_APPLICATION_CREDENTIALS=./gemini_cred.json
+# GOOGLE_PROJECT_ID=your_gcp_project_id
 ```
 
-| Variable | Where to get it |
-|---|---|
-| `DEEPSEEK_API_KEY` | [platform.deepseek.com](https://platform.deepseek.com) |
-| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com/apikey) |
-| `SUPERMEMORY_API_KEY` | [console.supermemory.ai](https://console.supermemory.ai) |
-| `APIFY_TOKEN` | [console.apify.com/account/integrations](https://console.apify.com/account/integrations) |
+| Variable | Required | Description |
+|---|---|---|
+| `DEEPSEEK_API_KEY` | Yes | Drafting and reflection nodes |
+| `OPENAI_API_KEY` | Yes | Research node (gpt-5.4) + Final Output when provider=openai |
+| `SUPERMEMORY_API_KEY` | Yes | Personal memory profile fetch |
+| `APIFY_TOKEN` | Yes | LinkedIn post scraping via MCP |
+| `FINAL_OUTPUT_PROVIDER` | No | `openai` (default) or `gemini` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | If gemini | Path to GCP service account JSON |
+| `GOOGLE_PROJECT_ID` | If gemini | GCP project with Vertex AI enabled |
+| `SUPERMEMORY_CONTAINER_TAG` | No | Scopes the profile query to your memory space. Find it in the Supermemory dashboard. Defaults to `""` (queries across all containers). |
 
-### 3. Seed your Supermemory (recommended)
+### 3. Seed your Supermemory
 
-The Digital Twin node reads your personal context from Supermemory. Add some memories about yourself before the first run using the [Supermemory console](https://console.supermemory.ai) or their API. Examples:
+The Digital Twin node queries your Supermemory profile using the day's research topics. Add memories about yourself via the [Supermemory console](https://console.supermemory.ai):
 
 - Your tech stack and interests
-- Your communication style and tone preferences
+- Your communication style and tone
 - Current projects you're working on
 
 Without any memories, the agent falls back to a generic writing tone.
@@ -187,31 +190,29 @@ Without any memories, the agent falls back to a generic writing tone.
 ## Running
 
 ```bash
-# Development (runs TypeScript directly, no compile step)
+# Full pipeline — saves JSON snapshot to output/
+npm run pipeline
+
+# Basic run — logs to console only
 npm run dev
 
-# Production (compile first, then run)
-npm run build
-npm start
+# Standalone image generation test
+npm run test:image
 ```
 
-### What you get after a run
+### Output
 
-```
-=== FINAL OUTPUT ===
+After a run, `output/run-<timestamp>.json` contains:
 
---- LinkedIn Post ---
-[150-300 word post in your voice]
-
---- X Post ---
-[max 280 char post]
-
---- Image ---
-Saved to: post-image.png
-
---- Stats ---
-Revision cycles: 2
-Approved by reflection: true
+```json
+{
+  "meta": { "durationMs": 59000, "revisionCycles": 2, "approvedByReflection": true },
+  "personalContext": "...",
+  "research": { "brief": "..." },
+  "drafts": { "linkedin": "...", "x": "..." },
+  "reflection": { "approved": true, "lastFeedback": "..." },
+  "finalOutput": { "linkedinPost": "...", "xPost": "...", "imagePath": "post-image.png" }
+}
 ```
 
 `post-image.png` is written to the project root.
@@ -220,77 +221,39 @@ Approved by reflection: true
 
 ## Testing
 
-Tests are organized into isolated sections — run them individually to pinpoint failures fast.
-
 ```bash
-# 1. Fast — env vars + import check (no API calls, ~1s)
-npm run test:env
-
-# 2. Supermemory SDK — profile() call against real API
-npm run test:memory
-
-# 3. Apify MCP — server starts and returns tools
-npm run test:mcp
-
-# 4. Hacker News — Firebase API fetch (no API key needed)
-npm run test:hn
-
-# 5. DeepSeek — Drafting + Reflection with fixture state (no MCP)
-npm run test:draft
-
-# 6. Full pipeline — all nodes, MCP, Gemini image gen
-npm run test:pipeline
-
-# All sections in sequence with a summary
-npm run test
-```
-
-### Test output format
-
-```
-──────────────────────────────────────────────────────────────
-  SECTION 3 — Apify MCP Connectivity
-──────────────────────────────────────────────────────────────
-  ✓ PASS  initializeConnections() — Apify MCP server starts (4821ms)
-           Apify MCP process started.
-  ✓ PASS  Apify tools load (>= 1 tool) (312ms)
-           3 tool(s): call-actor, get-actor-run, ...
-```
-
-Failures show the exact error message and a stack trace excerpt so you know immediately what broke and where.
-
-### Type checking
-
-```bash
-npm run typecheck
+npm run test:env       # Env vars + import check (~1s, no API calls)
+npm run test:memory    # Supermemory SDK profile() call
+npm run test:mcp       # Apify MCP server starts and returns tools
+npm run test:hn        # Hacker News Firebase API fetch
+npm run test:draft     # DeepSeek drafting + reflection with fixture state
+npm run test:pipeline  # Full end-to-end pipeline
+npm run test           # All sections in sequence
+npm run typecheck      # TypeScript type check only
 ```
 
 ---
 
 ## Node Reference
 
-### Node 1 — Digital Twin
-**Integration:** Supermemory SDK (`supermemory` npm package, direct REST API — no MCP)
+### Node 1 — Research
+Runs two data sources in sequence:
+1. Fetches the top **7** HN story titles and scores via the Firebase API
+2. Uses a GPT-5.4 ReAct agent with Apify MCP tools to call `harvestapi/linkedin-post-search` — queries `["AI Agents", "Node.js"]`, past week, sorted by relevance
 
-Calls `client.profile({ containerTag, q })` to retrieve the user's memory profile:
+The agent summarizes both into a single `researchData` string passed to all downstream nodes.
+
+### Node 2 — Digital Twin
+Queries Supermemory using a **dynamic query built from the research brief** — so the profile response surfaces opinions and context directly relevant to today's topics, not a generic profile.
+
+Calls `client.profile({ q })` which returns:
 - `profile.static` — long-term facts (interests, expertise, communication style)
 - `profile.dynamic` — recent activity and current focus
 
-The result is formatted into `personalContext` and injected into every downstream prompt. No LLM is involved — Supermemory handles profiling server-side.
-
-### Node 2 — Research
-**Integrations:** Hacker News Firebase API (native `fetch`) + Apify MCP (`harvestapi/linkedin-post-search`)
-
-Runs two data sources in sequence:
-1. Fetches top 3 HN story titles and scores
-2. Uses a DeepSeek ReAct agent with Apify tools to run `harvestapi/linkedin-post-search` with queries `["AI Agents", "Node.js"]`, past week, top 3 posts by relevance
-
-The ReAct agent summarizes both sources into a single `researchData` string.
+No LLM involved — Supermemory handles profiling server-side.
 
 ### Node 3 — Drafting
-**Integration:** DeepSeek `deepseek-chat` with `withStructuredOutput()`
-
-Writes two posts simultaneously using 8 strict humanization rules:
+DeepSeek `deepseek-chat` with `withStructuredOutput()` writes both posts simultaneously enforcing 8 humanization rules:
 
 | Rule | Detail |
 |---|---|
@@ -306,48 +269,39 @@ Writes two posts simultaneously using 8 strict humanization rules:
 On revision passes, `critiqueFeedback` from the previous reflection cycle is injected into the prompt.
 
 ### Node 4 — Reflection
-**Integration:** DeepSeek `deepseek-chat` (temperature 0.1 for deterministic critique)
-
-Acts as a strict editor. Evaluates both drafts against all 8 rules and returns:
-- `passed: boolean` — `true` only if every rule passes
+DeepSeek `deepseek-chat` at temperature 0.1 (deterministic critique). Evaluates both drafts against all 8 rules and returns:
+- `passed: boolean` — `true` only if every rule passes across both drafts
 - `feedback: string` — names the exact violation and the offending sentence
 
-Always increments `revisionCount`. The conditional edge reads this updated value to decide whether to loop back to drafting or proceed.
+Always increments `revisionCount`. The conditional edge fires `finalOutput` if `isApproved` or `revisionCount >= 3`.
 
 ### Node 5 — Final Output
-**Integration:** Google Gemini via `@google/genai` SDK (direct, not via LangChain)
+Provider selected by `FINAL_OUTPUT_PROVIDER` env var:
 
-**Step 1 — Text polish:** `gemini-3.1-flash-preview` with `responseMimeType: "application/json"` does a light formatting pass and returns `{ finalLinkedinPost, finalXPost }`.
-
-**Step 2 — Image generation:** `gemini-3.1-flash-image-preview` with `responseModalities: ["IMAGE", "TEXT"]` generates a header image. The `inlineData.data` (base64) from the response is decoded and written to `post-image.png`.
+| | OpenAI (default) | Gemini |
+|---|---|---|
+| Text polish | `gpt-4o` + JSON mode | `gemini-3.1-flash-preview` via Vertex AI |
+| Image | `gpt-image-1-mini` | `gemini-3.1-flash-image-preview` via Vertex AI |
+| Auth | `OPENAI_API_KEY` | Service account via `GOOGLE_APPLICATION_CREDENTIALS` |
 
 ---
 
 ## Architecture Notes
 
-**Why two different LLM providers?**
-DeepSeek (`deepseek-chat`) is cost-efficient and fast for structured text tasks like drafting and reflection. Gemini is used for the final pass because of its native JSON output mode and multimodal image generation capability.
+**Why research runs before Digital Twin?**
+The Supermemory query is built from the actual research topics found that day, so the profile response surfaces opinions and past thoughts relevant to what's being written — not a generic personality snapshot.
+
+**Why DeepSeek for drafting and reflection?**
+Cost-efficient and fast for structured text tasks. The `withStructuredOutput()` pattern with named function calls works reliably with DeepSeek's OpenAI-compatible API.
 
 **Why Supermemory SDK instead of MCP?**
-Supermemory does not publish an MCP server. Their integration is the `supermemory` npm package (a REST SDK). Using it directly is simpler and more reliable than routing through an MCP proxy.
+Supermemory does not publish an MCP server. The `supermemory` npm package is their official integration path.
 
 **Why Apify via MCP?**
-Apify's actor catalog is dynamic and maps naturally to MCP tools. The `@apify/actors-mcp-server` package is published and maintained by Apify, providing access to hundreds of scraping actors as callable tools without manual API wiring.
+Apify's actor catalog is dynamic and maps naturally to MCP tools. The `@apify/actors-mcp-server` exposes hundreds of scraping actors as callable tools without manual API wiring.
 
 **ESM + NodeNext**
-The project uses `"type": "module"` and `"moduleResolution": "NodeNext"`. All local imports use `.js` extensions (TypeScript resolves these to `.ts` at compile time). Node built-ins use the `node:` prefix.
-
----
-
-## Environment Variables Reference
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DEEPSEEK_API_KEY` | Yes | — | DeepSeek API key for drafting and reflection |
-| `GEMINI_API_KEY` | Yes | — | Google Gemini API key for final output and image gen |
-| `SUPERMEMORY_API_KEY` | Yes | — | Supermemory key for personal memory profile |
-| `APIFY_TOKEN` | Yes | — | Apify token for LinkedIn post search actor |
-| `SUPERMEMORY_CONTAINER_TAG` | No | `content-agent-user` | Scopes your memory space |
+All local imports use `.js` extensions (TypeScript resolves these to `.ts` at compile time). Node built-ins use the `node:` prefix.
 
 ---
 

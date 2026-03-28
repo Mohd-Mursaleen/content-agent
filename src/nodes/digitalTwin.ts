@@ -9,9 +9,6 @@
  *
  * No LLM is needed here — Supermemory handles memory extraction and profiling
  * server-side. The result is formatted into a context string for downstream nodes.
- *
- * Container tag: identifies the memory space to query. Set SUPERMEMORY_CONTAINER_TAG
- * in your .env to use a custom tag (defaults to "content-agent-user").
  */
 
 import Supermemory from "supermemory";
@@ -21,13 +18,25 @@ import type { AgentStateType } from "../state/schema.js";
 const hr = (label: string) =>
   console.log(`\n${"─".repeat(20)} ${label} ${"─".repeat(20)}`);
 
-// The container tag scopes all memory reads/writes to a single user's memory space.
-// Override via SUPERMEMORY_CONTAINER_TAG env var if you manage multiple users.
-const CONTAINER_TAG =
-  process.env["SUPERMEMORY_CONTAINER_TAG"] ?? "content-agent-user";
-
-const PROFILE_QUERY =
-  "tech interests current projects preferred tone of voice communication style writing personality";
+/**
+ * Builds a Supermemory profile query from the research brief.
+ * Uses the actual topics from today's research so the profile response surfaces
+ * opinions and past thoughts that are directly relevant to the content being drafted.
+ *
+ * @param researchData - Research brief from the Research node
+ * @returns Supermemory query string
+ */
+function buildProfileQuery(researchData: string): string {
+  // Use the first 600 chars of the brief as topic context — enough for semantic
+  // relevance without overwhelming the query with noise.
+  const topicContext = researchData.slice(0, 600).trim();
+  return (
+    `Based on this research context: ${topicContext}\n\n` +
+    `Retrieve my personal opinions, past experiences, and perspectives on these topics. ` +
+    `Also include my tech interests, current projects, preferred writing tone, ` +
+    `communication style, and writing personality.`
+  );
+}
 
 /**
  * Factory that creates the Digital Twin node.
@@ -42,20 +51,22 @@ export function createDigitalTwinNode() {
   /**
    * Fetches the user's memory profile and formats it into `personalContext`.
    *
-   * @param state - Current agent state (unused at this node, profile is user-scoped)
+   * @param state - Current agent state; `researchData` is used to build the Supermemory query
    * @returns Partial state update with `personalContext`
    */
   return async function digitalTwinNode(
-    _state: AgentStateType
+    state: AgentStateType
   ): Promise<Partial<AgentStateType>> {
-    console.log(
-      `[Node 1] Digital Twin — querying Supermemory (container: ${CONTAINER_TAG})...`
-    );
+    console.log("[Node 1] Digital Twin — building query from research topics...");
+    const query = buildProfileQuery(state.researchData);
 
-    const result = await client.profile({
-      containerTag: CONTAINER_TAG,
-      q: PROFILE_QUERY,
-    });
+    // containerTag is required by the Supermemory API (undefined → 400).
+    // Set SUPERMEMORY_CONTAINER_TAG in .env to scope to your memory space.
+    // Leave it unset to use an empty string which queries across all containers.
+    const containerTag = process.env["SUPERMEMORY_CONTAINER_TAG"] ?? "";
+
+    console.log(`[Node 1] Querying Supermemory (containerTag: "${containerTag || "all"}")...`);
+    const result = await client.profile({ containerTag, q: query });
 
     const staticFacts = result.profile.static ?? [];
     const dynamicContext = result.profile.dynamic ?? [];
@@ -81,7 +92,7 @@ export function createDigitalTwinNode() {
         : "No personal context stored yet. Write in a direct, first-person, conversational tone.";
 
     hr("Node 1 — Supermemory Profile");
-    console.log(`Container : ${CONTAINER_TAG}`);
+    console.log(`Container tag : "${containerTag || "all"}"`);
     console.log(`Static facts (${staticFacts.length}):`);
     staticFacts.forEach((f, i) => console.log(`  [${i + 1}] ${f}`));
     console.log(`Dynamic context (${dynamicContext.length}):`);

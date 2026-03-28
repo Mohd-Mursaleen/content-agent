@@ -56,9 +56,12 @@ function routeAfterReflection(
  * Builds and compiles the content generation StateGraph.
  *
  * Graph flow:
- *   START → digitalTwin → research → drafting → reflection
+ *   START → research → digitalTwin → drafting → reflection
  *   reflection → (conditional) → finalOutput → END
  *                             ↘ → drafting (loop, max 3 revision cycles)
+ *
+ * Research runs first so digitalTwin can build a context-aware Supermemory
+ * query from the actual topics found in HN + LinkedIn data.
  *
  * @param apifyTools - LangChain tools from the Apify MCP server
  * @returns Compiled LangGraph application ready to invoke
@@ -70,9 +73,9 @@ export function buildWorkflow(apifyTools: StructuredToolInterface[]) {
     .addNode("drafting", createDraftingNode())
     .addNode("reflection", createReflectionNode())
     .addNode("finalOutput", createFinalOutputNode())
-    .addEdge(START, "digitalTwin")
-    .addEdge("digitalTwin", "research")
-    .addEdge("research", "drafting")
+    .addEdge(START, "research")
+    .addEdge("research", "digitalTwin")
+    .addEdge("digitalTwin", "drafting")
     .addEdge("drafting", "reflection")
     .addConditionalEdges("reflection", routeAfterReflection)
     .addEdge("finalOutput", END);
